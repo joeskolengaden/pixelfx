@@ -23,7 +23,9 @@ endif
 TARGET := lib$(PLUGIN)$(SHLIB_EXT)
 OBJS   := src/PixelFxPlugin.o
 
-CXXFLAGS += -std=gnu++20 -fPIC -O2 -Wall -fvisibility=default -I$(SRCDIR)
+# gnu++2a is recognized by GCC 8 (Debian 10 / FPP 5.4) through current GCC, so
+# one flag covers every FPP from 5.4 to 9.x.
+CXXFLAGS += -std=gnu++2a -fPIC -O2 -Wall -fvisibility=default -I$(SRCDIR)
 CXXFLAGS += $(shell pkg-config --cflags jsoncpp 2>/dev/null)
 
 .PHONY: all clean

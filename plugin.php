@@ -18,13 +18,15 @@ function px_sel($k, $v, $d = '')
 {
     return (px_get($k, $d) === $v) ? ' selected' : '';
 }
+// 5-arg SetPluginSetting form works on FPP 5.4 (POST) through 9.x (PUT) — each
+// device's fpp.js uses the right HTTP method.
 function px_bool($plugin, $k)
 {
-    return "SetPluginSetting('$plugin','$k', this.checked ? 1 : 0, 0, 0, this.checked);";
+    return "SetPluginSetting('$plugin','$k', this.checked ? 1 : 0, 0, 0);";
 }
 function px_val($plugin, $k)
 {
-    return "SetPluginSetting('$plugin','$k', this.value, 0, 0, null);";
+    return "SetPluginSetting('$plugin','$k', this.value, 0, 0);";
 }
 $P = 'pixelfx';
 $colorOrders = array('RGB', 'RBG', 'GRB', 'GBR', 'BRG', 'BGR');

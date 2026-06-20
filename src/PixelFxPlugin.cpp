@@ -1,27 +1,36 @@
 /*
- * FPP "pixelfx" plugin
+ * FPP "pixelfx" plugin  -  compatible with FPP 5.4 through 9.x
  *
  * A single ChannelData plugin combining three independently-toggleable modifier
  * functions, applied to the live channel buffer each frame, immediately before
- * output (FPPPlugins::ChannelDataPlugin::modifyChannelData):
+ * output (FPPPlugin::modifyChannelData):
  *
  *   1. Hue shift  - time-driven hue rotation of lit pixels (sine/triangle/
  *                   sawtooth/square) with optional per-pixel phase (rainbow wave)
  *   2. Color order- reorder the R/G/B bytes of each pixel (RGB..BGR)
  *   3. Framerate  - hold frames to a target FPS for a choppy / low-FPS look
  *
- * They run in that fixed order (framerate last, so it freezes the final result).
- * Each function has its own enable + channel range. A master "enabled" gates the
- * whole plugin. As a modifier layer it never alters test patterns, and
- * "onlyWhenPlaying" (default on) limits it to sequence playback.
+ * They run in that fixed order (framerate last). Each function has its own
+ * enable + channel range. A master "enabled" gates the whole plugin. As a
+ * modifier layer it never alters test patterns, and "onlyWhenPlaying" (default
+ * on) limits it to sequence playback.
  *
- * Settings live in <config>/plugin.pixelfx (key=value), hot-reloaded by FPP's
- * FileMonitor which invokes settingChanged().
+ * Cross-version notes:
+ *   - Uses only API present in every FPP from 5.4 onward: the one-arg
+ *     FPPPlugin(name) ctor, modifyChannelData(int,uint8_t*), the protected
+ *     `settings` map and reloadSettings(). It deliberately avoids the 9.x-only
+ *     settingChanged()/FileMonitor and APIProvider hooks so one source compiles
+ *     against any of these versions (the plugin is built on the device against
+ *     that device's FPP headers).
+ *   - Live settings updates: since 5.4 has no settingChanged callback, the
+ *     plugin re-reads its settings file (reloadSettings) about twice a second.
+ *     The app/UI writes settings via FPP's REST API; changes apply within ~0.5s
+ *     with no fppd restart. Only the output thread touches state, so no locking.
  */
 
 #include <algorithm>
 #include <array>
-#include <atomic>
+#include <chrono>
 #include <climits>
 #include <cmath>
 #include <cstdint>
@@ -148,61 +157,17 @@ double toDouble(const std::string& v, double def) {
 class PixelFxPlugin : public FPPPlugin {
 public:
     PixelFxPlugin() :
-        FPPPlugin("pixelfx", /*monitorSettings=*/true) {
-        for (const auto& kv : settings) {
-            settingChanged(kv.first, kv.second);
-        }
+        FPPPlugin("pixelfx") {
+        // Base ctor already loaded the settings file into `settings`.
+        mLastReload = std::chrono::steady_clock::now();
+        applySettings();
     }
 
     ~PixelFxPlugin() override = default;
 
-    void settingChanged(const std::string& key, const std::string& value) override {
-        // general
-        if (key == "enabled") {
-            mEnabled.store(toLong(value, 0) != 0);
-        } else if (key == "onlyWhenPlaying") {
-            mOnlyWhenPlaying.store(toLong(value, 1) != 0);
-
-        // hue shift
-        } else if (key == "hs_enabled") {
-            mHsEnabled.store(toLong(value, 0) != 0);
-        } else if (key == "hs_startChannel") {
-            mHsStart.store(std::max<long>(1, toLong(value, 1)));
-        } else if (key == "hs_channelCount") {
-            mHsCount.store(std::max<long>(0, toLong(value, 0)));
-        } else if (key == "hs_hueWave") {
-            mHsWave.store(parseWave(value));
-        } else if (key == "hs_huePeriodMs") {
-            mHsPeriodMs.store(std::max(1.0, toDouble(value, 5000.0)));
-        } else if (key == "hs_hueDepthDeg") {
-            mHsDepth.store(toDouble(value, 360.0));
-        } else if (key == "hs_huePhasePerChannel") {
-            mHsPhase.store(toDouble(value, 0.0));
-
-        // color order
-        } else if (key == "co_enabled") {
-            mCoEnabled.store(toLong(value, 0) != 0);
-        } else if (key == "co_startChannel") {
-            mCoStart.store(std::max<long>(1, toLong(value, 1)));
-        } else if (key == "co_channelCount") {
-            mCoCount.store(std::max<long>(0, toLong(value, 0)));
-        } else if (key == "co_colorOrder") {
-            mCoOrder.store(parseColorOrder(value));
-
-        // framerate
-        } else if (key == "fr_enabled") {
-            mFrEnabled.store(toLong(value, 0) != 0);
-        } else if (key == "fr_startChannel") {
-            mFrStart.store(std::max<long>(1, toLong(value, 1)));
-        } else if (key == "fr_channelCount") {
-            mFrCount.store(std::max<long>(0, toLong(value, 0)));
-        } else if (key == "fr_fps") {
-            mFrFps.store(std::max(0.0, toDouble(value, 0.0)));
-        }
-    }
-
     void modifyChannelData(int ms, uint8_t* seqData) override {
-        if (!mEnabled.load() || seqData == nullptr) {
+        maybeReload();
+        if (!mEnabled || seqData == nullptr) {
             return;
         }
         if (!shouldModify()) {
@@ -215,36 +180,70 @@ public:
     }
 
 private:
+    std::string cfg(const std::string& k) const {
+        auto it = settings.find(k);
+        return it == settings.end() ? std::string() : it->second;
+    }
+
+    // Re-read the settings file ~twice a second so app/UI changes apply live
+    // without a settingChanged callback (which 5.4 lacks).
+    void maybeReload() {
+        const auto now = std::chrono::steady_clock::now();
+        if (now - mLastReload >= std::chrono::milliseconds(500)) {
+            mLastReload = now;
+            reloadSettings();
+            applySettings();
+        }
+    }
+
+    void applySettings() {
+        mEnabled = toLong(cfg("enabled"), 0) != 0;
+        mOnlyWhenPlaying = toLong(cfg("onlyWhenPlaying"), 1) != 0;
+
+        mHsEnabled = toLong(cfg("hs_enabled"), 0) != 0;
+        mHsStart = std::max<long>(1, toLong(cfg("hs_startChannel"), 1));
+        mHsCount = std::max<long>(0, toLong(cfg("hs_channelCount"), 1500));
+        mHsWave = parseWave(cfg("hs_hueWave"));
+        mHsPeriodMs = std::max(1.0, toDouble(cfg("hs_huePeriodMs"), 5000.0));
+        mHsDepth = toDouble(cfg("hs_hueDepthDeg"), 360.0);
+        mHsPhase = toDouble(cfg("hs_huePhasePerChannel"), 0.0);
+
+        mCoEnabled = toLong(cfg("co_enabled"), 0) != 0;
+        mCoStart = std::max<long>(1, toLong(cfg("co_startChannel"), 1));
+        mCoCount = std::max<long>(0, toLong(cfg("co_channelCount"), 1500));
+        mCoOrder = parseColorOrder(cfg("co_colorOrder"));
+
+        mFrEnabled = toLong(cfg("fr_enabled"), 0) != 0;
+        mFrStart = std::max<long>(1, toLong(cfg("fr_startChannel"), 1));
+        mFrCount = std::max<long>(0, toLong(cfg("fr_channelCount"), 1500));
+        mFrFps = std::max(0.0, toDouble(cfg("fr_fps"), 20.0));
+    }
+
     // Modifier layer: never touch test patterns, and (optionally) only while a
     // sequence is playing.
     bool shouldModify() const {
         if (ChannelTester::INSTANCE.Testing()) {
             return false;
         }
-        if (mOnlyWhenPlaying.load() && (sequence == nullptr || !sequence->IsSequenceRunning())) {
+        if (mOnlyWhenPlaying && (sequence == nullptr || !sequence->IsSequenceRunning())) {
             return false;
         }
         return true;
     }
 
     void applyHueShift(int ms, uint8_t* seqData) {
-        if (!mHsEnabled.load()) {
+        if (!mHsEnabled || mHsWave == 0 || mHsDepth == 0.0) {
             return;
         }
-        const int wave = mHsWave.load();
-        const double depth = mHsDepth.load();
-        if (wave == 0 || depth == 0.0) {
-            return;
-        }
-        const long start = std::max<long>(1, mHsStart.load());
-        const long count = mHsCount.load();
+        const long start = std::max<long>(1, mHsStart);
+        const long count = mHsCount;
         if (count < 3) {
             return;
         }
         const long startIdx = start - 1;
         const long pixels = count / 3;
-        const double baseHue = depth * wavePhase(wave, ms, mHsPeriodMs.load());
-        const double phasePer = mHsPhase.load();
+        const double baseHue = mHsDepth * wavePhase(mHsWave, ms, mHsPeriodMs);
+        const double phasePer = mHsPhase;
         for (long i = 0; i < pixels; ++i) {
             const long idx = startIdx + i * 3;
             uint8_t r = seqData[idx], g = seqData[idx + 1], b = seqData[idx + 2];
@@ -259,21 +258,17 @@ private:
     }
 
     void applyColorOrder(uint8_t* seqData) {
-        if (!mCoEnabled.load()) {
+        if (!mCoEnabled || mCoOrder == 0) {
             return;
         }
-        const int order = mCoOrder.load();
-        if (order == 0) {
-            return;
-        }
-        const long start = std::max<long>(1, mCoStart.load());
-        const long count = mCoCount.load();
+        const long start = std::max<long>(1, mCoStart);
+        const long count = mCoCount;
         if (count < 3) {
             return;
         }
         const long startIdx = start - 1;
         const long pixels = count / 3;
-        const auto& ord = ORDER[order];
+        const auto& ord = ORDER[mCoOrder];
         for (long i = 0; i < pixels; ++i) {
             const long idx = startIdx + i * 3;
             const uint8_t src[3] = {seqData[idx], seqData[idx + 1], seqData[idx + 2]};
@@ -284,15 +279,11 @@ private:
     }
 
     void applyFramerate(int ms, uint8_t* seqData) {
-        if (!mFrEnabled.load()) {
+        if (!mFrEnabled || mFrFps <= 0.0) {
             return;
         }
-        const double fps = mFrFps.load();
-        if (fps <= 0.0) {
-            return;
-        }
-        const long start = std::max<long>(1, mFrStart.load());
-        const long count = mFrCount.load();
+        const long start = std::max<long>(1, mFrStart);
+        const long count = mFrCount;
         if (count < 1) {
             return;
         }
@@ -301,7 +292,7 @@ private:
             mHeld.assign(count, 0);
             mFrBucket = LLONG_MIN;
         }
-        const double frameMs = 1000.0 / fps;
+        const double frameMs = 1000.0 / mFrFps;
         const long long bucket = static_cast<long long>(std::floor(ms / frameMs));
         if (bucket == mFrBucket) {
             std::memcpy(seqData + startIdx, mHeld.data(), count);
@@ -311,32 +302,30 @@ private:
         }
     }
 
-    // general
-    std::atomic<bool> mEnabled{false};
-    std::atomic<bool> mOnlyWhenPlaying{true};
+    std::chrono::steady_clock::time_point mLastReload;
 
-    // hue shift
-    std::atomic<bool> mHsEnabled{false};
-    std::atomic<long> mHsStart{1};
-    std::atomic<long> mHsCount{1500};
-    std::atomic<int> mHsWave{0};
-    std::atomic<double> mHsPeriodMs{5000.0};
-    std::atomic<double> mHsDepth{360.0};
-    std::atomic<double> mHsPhase{0.0};
+    bool mEnabled = false;
+    bool mOnlyWhenPlaying = true;
 
-    // color order
-    std::atomic<bool> mCoEnabled{false};
-    std::atomic<long> mCoStart{1};
-    std::atomic<long> mCoCount{1500};
-    std::atomic<int> mCoOrder{0};
+    bool mHsEnabled = false;
+    long mHsStart = 1;
+    long mHsCount = 1500;
+    int mHsWave = 0;
+    double mHsPeriodMs = 5000.0;
+    double mHsDepth = 360.0;
+    double mHsPhase = 0.0;
 
-    // framerate
-    std::atomic<bool> mFrEnabled{false};
-    std::atomic<long> mFrStart{1};
-    std::atomic<long> mFrCount{1500};
-    std::atomic<double> mFrFps{20.0};
-    std::vector<uint8_t> mHeld;     // output-thread only
-    long long mFrBucket{LLONG_MIN}; // output-thread only
+    bool mCoEnabled = false;
+    long mCoStart = 1;
+    long mCoCount = 1500;
+    int mCoOrder = 0;
+
+    bool mFrEnabled = false;
+    long mFrStart = 1;
+    long mFrCount = 1500;
+    double mFrFps = 20.0;
+    std::vector<uint8_t> mHeld;
+    long long mFrBucket = LLONG_MIN;
 };
 
 extern "C" {

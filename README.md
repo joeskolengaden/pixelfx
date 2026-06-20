@@ -12,6 +12,20 @@ output:
 They run in that fixed order (framerate last, so it freezes the final result).
 Each function has its own enable and channel range, under one master switch.
 
+## FPP compatibility (5.4 → 9.x)
+
+One source compiles against any FPP from **5.4 onward** — it uses only plugin API
+present in every version (the `FPPPlugin(name)` ctor, `modifyChannelData`, the
+`settings` map + `reloadSettings()`, and the test/sequence state) and avoids the
+9.x-only `settingChanged`/FileMonitor hooks. The plugin is compiled on each
+device against that device's headers, so version-specific details resolve
+automatically. Built with `-std=gnu++2a` (works on Debian 10 / GCC 8 through
+current GCC).
+
+Because 5.4 has no live settings callback, the plugin **re-reads its settings
+file about twice a second**, so app/UI changes apply within ~0.5 s with no fppd
+restart on every supported version.
+
 ## Modifier-layer behavior
 
 - Acts on the live channel buffer — the `.fseq` on disk is never changed.
