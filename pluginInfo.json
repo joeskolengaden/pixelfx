@@ -1,0 +1,45 @@
+{
+	"repoName": "pixelfx",
+	"name": "Pixel FX (color order / hue / framerate)",
+	"author": "joeskolengaden",
+	"description": "Single ChannelData modifier plugin with three independently-toggleable functions over the playing sequence: hue-shift wave, color-order swap, and framerate reducer. Each has its own channel range. Never alters test patterns.",
+	"homeURL": "https://github.com/joeskolengaden/pixelfx",
+	"srcURL": "https://github.com/joeskolengaden/pixelfx.git",
+	"bugURL": "https://github.com/joeskolengaden/pixelfx/issues",
+	"allowUpdates": 1,
+	"hasSettingsPage": 1,
+	"pluginType": "channelData",
+	"pipelineStage": "modifyChannelData",
+	"appSchemaVersion": 1,
+	"settingsFile": "config/plugin.pixelfx",
+	"settingsSchema": [
+		{ "key": "enabled", "label": "Plugin enabled", "type": "bool", "default": false, "group": "general", "appliesLive": true, "help": "Master on/off for all functions." },
+		{ "key": "onlyWhenPlaying", "label": "Only while a sequence is playing", "type": "bool", "default": true, "group": "general", "appliesLive": true, "help": "Only modify during sequence playback. Test patterns are never modified." },
+
+		{ "key": "hs_enabled", "label": "Hue shift enabled", "type": "bool", "default": false, "group": "hueshift", "appliesLive": true, "help": "Enable the hue-shift wave function." },
+		{ "key": "hs_startChannel", "label": "Hue: start channel", "type": "int", "default": 1, "min": 1, "max": 1048576, "step": 1, "unit": "channel", "group": "hueshift", "appliesLive": true },
+		{ "key": "hs_channelCount", "label": "Hue: channel count", "type": "int", "default": 1500, "min": 0, "max": 1048576, "step": 3, "unit": "channels", "group": "hueshift", "appliesLive": true },
+		{ "key": "hs_hueWave", "label": "Hue wave", "type": "enum", "default": "off", "options": ["off", "sine", "triangle", "sawtooth", "square"], "group": "hueshift", "appliesLive": true },
+		{ "key": "hs_huePeriodMs", "label": "Hue period", "type": "int", "default": 5000, "min": 1, "max": 600000, "step": 100, "unit": "ms", "group": "hueshift", "appliesLive": true },
+		{ "key": "hs_hueDepthDeg", "label": "Hue depth", "type": "int", "default": 360, "min": 0, "max": 360, "step": 1, "unit": "deg", "group": "hueshift", "appliesLive": true },
+		{ "key": "hs_huePhasePerChannel", "label": "Hue phase / LED", "type": "float", "default": 0, "min": -45, "max": 45, "step": 0.1, "unit": "deg", "group": "hueshift", "appliesLive": true, "help": "Per-pixel hue offset for a traveling rainbow wave." },
+
+		{ "key": "co_enabled", "label": "Color order enabled", "type": "bool", "default": false, "group": "colororder", "appliesLive": true, "help": "Enable the color-order swap function." },
+		{ "key": "co_startChannel", "label": "Color: start channel", "type": "int", "default": 1, "min": 1, "max": 1048576, "step": 1, "unit": "channel", "group": "colororder", "appliesLive": true },
+		{ "key": "co_channelCount", "label": "Color: channel count", "type": "int", "default": 1500, "min": 0, "max": 1048576, "step": 3, "unit": "channels", "group": "colororder", "appliesLive": true },
+		{ "key": "co_colorOrder", "label": "Color order", "type": "enum", "default": "RGB", "options": ["RGB", "RBG", "GRB", "GBR", "BRG", "BGR"], "group": "colororder", "appliesLive": true },
+
+		{ "key": "fr_enabled", "label": "Framerate enabled", "type": "bool", "default": false, "group": "framerate", "appliesLive": true, "help": "Enable the framerate-reducer function." },
+		{ "key": "fr_startChannel", "label": "Framerate: start channel", "type": "int", "default": 1, "min": 1, "max": 1048576, "step": 1, "unit": "channel", "group": "framerate", "appliesLive": true },
+		{ "key": "fr_channelCount", "label": "Framerate: channel count", "type": "int", "default": 1500, "min": 0, "max": 1048576, "step": 1, "unit": "channels", "group": "framerate", "appliesLive": true },
+		{ "key": "fr_fps", "label": "Framerate", "type": "int", "default": 20, "min": 0, "max": 120, "step": 1, "unit": "fps", "group": "framerate", "appliesLive": true, "help": "Hold frames to this rate. 0 = disabled." }
+	],
+	"versions": [
+		{
+			"minFPPVersion": "9.0",
+			"maxFPPVersion": "0",
+			"branch": "main",
+			"sha": ""
+		}
+	]
+}
