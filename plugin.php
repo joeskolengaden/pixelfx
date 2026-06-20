@@ -31,7 +31,7 @@ $colorOrders = array('RGB', 'RBG', 'GRB', 'GBR', 'BRG', 'BGR');
 $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
 ?>
 <style>
-#pfx{max-width:860px;margin:0 auto;color:#1f2733;font-size:14px}
+#pfx{max-width:880px;margin:0 auto;color:#1f2733;font-size:14px}
 #pfx .pfx-intro{color:#6b7280;font-size:13px;margin:0 0 18px}
 #pfx .pfx-card{border:1px solid #e4e7ec;border-radius:12px;margin:0 0 16px;overflow:hidden;background:#fff}
 #pfx .pfx-head{display:flex;align-items:center;gap:12px;padding:13px 18px;background:#f6f8fa;border-bottom:1px solid #eceef2}
@@ -39,14 +39,17 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
 #pfx .pfx-head .pfx-sub{color:#6b7280;font-size:12px;font-weight:400}
 #pfx .pfx-body{padding:14px 18px}
 #pfx .pfx-body.pfx-off{opacity:.45;pointer-events:none}
-#pfx .pfx-grid{display:grid;grid-template-columns:160px minmax(120px,220px) 1fr;gap:11px 16px;align-items:center}
+#pfx .pfx-grid{display:grid;grid-template-columns:150px minmax(120px,300px) 1fr;gap:11px 16px;align-items:center}
 #pfx .pfx-lab{font-weight:500;color:#374151}
 #pfx .pfx-help{color:#6b7280;font-size:12.5px}
-#pfx input[type=number],#pfx select{width:100%;max-width:180px;padding:7px 10px;border:1px solid #cdd3dc;border-radius:7px;background:#fff;font-size:14px;color:#1f2733;box-sizing:border-box}
+#pfx input[type=number],#pfx select{width:100%;max-width:170px;padding:7px 10px;border:1px solid #cdd3dc;border-radius:7px;background:#fff;font-size:14px;color:#1f2733;box-sizing:border-box}
 #pfx input[type=number]:focus,#pfx select:focus{outline:none;border-color:#2f9e6f;box-shadow:0 0 0 3px rgba(47,158,111,.15)}
-#pfx .pfx-range{display:flex;gap:8px;align-items:center;max-width:240px}
-#pfx .pfx-range input{max-width:96px}
+#pfx .pfx-range{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+#pfx .pfx-range input{max-width:92px}
 #pfx .pfx-range span{color:#9aa1ac;font-size:12px}
+#pfx .pfx-auto{padding:6px 11px;border:1px solid #2f9e6f;background:#eafaf2;color:#1c6b4a;border-radius:7px;font-size:12.5px;cursor:pointer;white-space:nowrap}
+#pfx .pfx-auto:hover{background:#dcf5e9}
+#pfx .pfx-auto:active{transform:scale(.97)}
 #pfx .sw{position:relative;display:inline-block;width:46px;height:25px;vertical-align:middle;flex:none}
 #pfx .sw input{opacity:0;width:0;height:0}
 #pfx .sw .sl{position:absolute;cursor:pointer;inset:0;background:#cbd1da;border-radius:25px;transition:.18s}
@@ -59,7 +62,7 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
 </style>
 
 <div id="pfx">
-  <p class="pfx-intro">Live modifier layer over the playing sequence. Three independent functions run in order: hue shift &rarr; color order &rarr; framerate. Changes apply within ~0.5&nbsp;s &mdash; no restart. Test patterns are never modified.</p>
+  <p class="pfx-intro">Live modifier layer over the playing sequence. Three independent functions run in order: hue shift &rarr; color order &rarr; framerate. Changes apply within ~0.5&nbsp;s &mdash; no restart. Test patterns are never modified. The range defaults to all your configured output channels (<b>All outputs</b>).</p>
 
   <div class="pfx-card">
     <div class="pfx-head">
@@ -67,7 +70,7 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
       <span class="pfx-sub">master switch</span>
       <label class="sw"><input type="checkbox" id="pfx-master"<?php echo px_chk('enabled'); ?> onChange="<?php echo px_bool('enabled'); ?>"><span class="sl"></span></label>
     </div>
-    <div class="pfx-body" data-card="master">
+    <div class="pfx-body">
       <div class="pfx-genrow">
         <span class="pfx-lab">Only while playing</span>
         <label class="sw"><input type="checkbox"<?php echo px_chk('onlyWhenPlaying', '1'); ?> onChange="SetPluginSetting('pixelfx','onlyWhenPlaying', this.checked ? 1 : 0, 0, 0);"><span class="sl"></span></label>
@@ -85,9 +88,10 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
       <div class="pfx-grid">
         <div class="pfx-lab">Range</div>
         <div class="pfx-range">
-          <input type="number" min="1" value="<?php echo htmlspecialchars(px_get('hs_startChannel', '1')); ?>" onChange="<?php echo px_val('hs_startChannel'); ?>">
+          <input type="number" id="pfx-hs-start" min="1" value="<?php echo htmlspecialchars(px_get('hs_startChannel', '1')); ?>" onChange="<?php echo px_val('hs_startChannel'); ?>">
           <span>to</span>
-          <input type="number" min="0" step="3" value="<?php echo htmlspecialchars(px_get('hs_channelCount', '1500')); ?>" onChange="<?php echo px_val('hs_channelCount'); ?>">
+          <input type="number" id="pfx-hs-count" min="0" step="3" value="<?php echo htmlspecialchars(px_get('hs_channelCount', '1500')); ?>" onChange="<?php echo px_val('hs_channelCount'); ?>">
+          <button type="button" class="pfx-auto" onclick="pfxAllOutputs('hs')">All outputs</button>
         </div>
         <div class="pfx-help">Start channel &amp; count (channels = LEDs &times; 3).</div>
 
@@ -119,9 +123,10 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
       <div class="pfx-grid">
         <div class="pfx-lab">Range</div>
         <div class="pfx-range">
-          <input type="number" min="1" value="<?php echo htmlspecialchars(px_get('co_startChannel', '1')); ?>" onChange="<?php echo px_val('co_startChannel'); ?>">
+          <input type="number" id="pfx-co-start" min="1" value="<?php echo htmlspecialchars(px_get('co_startChannel', '1')); ?>" onChange="<?php echo px_val('co_startChannel'); ?>">
           <span>to</span>
-          <input type="number" min="0" step="3" value="<?php echo htmlspecialchars(px_get('co_channelCount', '1500')); ?>" onChange="<?php echo px_val('co_channelCount'); ?>">
+          <input type="number" id="pfx-co-count" min="0" step="3" value="<?php echo htmlspecialchars(px_get('co_channelCount', '1500')); ?>" onChange="<?php echo px_val('co_channelCount'); ?>">
+          <button type="button" class="pfx-auto" onclick="pfxAllOutputs('co')">All outputs</button>
         </div>
         <div class="pfx-help">Start channel &amp; count.</div>
 
@@ -141,9 +146,10 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
       <div class="pfx-grid">
         <div class="pfx-lab">Range</div>
         <div class="pfx-range">
-          <input type="number" min="1" value="<?php echo htmlspecialchars(px_get('fr_startChannel', '1')); ?>" onChange="<?php echo px_val('fr_startChannel'); ?>">
+          <input type="number" id="pfx-fr-start" min="1" value="<?php echo htmlspecialchars(px_get('fr_startChannel', '1')); ?>" onChange="<?php echo px_val('fr_startChannel'); ?>">
           <span>to</span>
-          <input type="number" min="0" value="<?php echo htmlspecialchars(px_get('fr_channelCount', '1500')); ?>" onChange="<?php echo px_val('fr_channelCount'); ?>">
+          <input type="number" id="pfx-fr-count" min="0" value="<?php echo htmlspecialchars(px_get('fr_channelCount', '1500')); ?>" onChange="<?php echo px_val('fr_channelCount'); ?>">
+          <button type="button" class="pfx-auto" onclick="pfxAllOutputs('fr')">All outputs</button>
         </div>
         <div class="pfx-help">Start channel &amp; count.</div>
 
@@ -156,20 +162,77 @@ $waves = array('off', 'sine', 'triangle', 'sawtooth', 'square');
 </div>
 
 <script>
-// Dim a function's body when its enable toggle is off. The toggle is in the
-// card head; the body is the next sibling.
+// Dim a function's body when its enable toggle is off.
 function pfxToggle(cb) {
-    var head = cb.closest('.pfx-head');
-    if (!head) return;
-    var body = head.nextElementSibling;
     if (cb.id === 'pfx-master') {
-        // master: dim every card body
         document.querySelectorAll('#pfx .pfx-body').forEach(function (b) {
             b.style.opacity = cb.checked ? '' : '.45';
             b.style.pointerEvents = cb.checked ? '' : 'none';
         });
         return;
     }
-    if (body) body.classList.toggle('pfx-off', !cb.checked);
+    var head = cb.closest('.pfx-head');
+    if (head && head.nextElementSibling) head.nextElementSibling.classList.toggle('pfx-off', !cb.checked);
 }
+
+// Compute the channel span of all configured outputs (co-*.json) by walking the
+// output config for any node with startChannel + pixelCount/channelCount.
+var pfxOutputsCache = null;
+function pfxComputeOutputs() {
+    if (pfxOutputsCache) return Promise.resolve(pfxOutputsCache);
+    var minS = Infinity, maxE = 0;
+    function walk(n) {
+        if (Array.isArray(n)) { n.forEach(walk); return; }
+        if (n && typeof n === 'object') {
+            if (n.startChannel !== undefined) {
+                var s = +n.startChannel, len = 0;
+                if (n.pixelCount !== undefined) len = (+n.pixelCount) * 3;
+                else if (n.channelCount !== undefined && +n.channelCount > 0) len = +n.channelCount;
+                if (len > 0 && s > 0) { if (s < minS) minS = s; if (s + len - 1 > maxE) maxE = s + len - 1; }
+            }
+            for (var k in n) walk(n[k]);
+        }
+    }
+    return fetch('api/configfile').then(function (r) { return r.json(); }).then(function (list) {
+        var files = (list.ConfigFiles || []).filter(function (f) { return f.indexOf('co-') === 0; })
+            .map(function (f) { return f.replace(/\.json$/, ''); });
+        return files.reduce(function (p, f) {
+            return p.then(function () {
+                return fetch('api/channel/output/' + f).then(function (r) { return r.json(); })
+                    .then(function (cfg) { walk(cfg); }).catch(function () {});
+            });
+        }, Promise.resolve());
+    }).then(function () {
+        pfxOutputsCache = (maxE > 0 && minS !== Infinity) ? { start: minS, count: maxE - minS + 1 } : { start: 1, count: 0 };
+        return pfxOutputsCache;
+    }).catch(function () { return { start: 1, count: 0 }; });
+}
+
+function pfxAllOutputs(p) {
+    return pfxComputeOutputs().then(function (r) {
+        if (!r.count) { alert('Could not detect output channels from the FPP output configuration.'); return; }
+        document.getElementById('pfx-' + p + '-start').value = r.start;
+        document.getElementById('pfx-' + p + '-count').value = r.count;
+        SetPluginSetting('pixelfx', p + '_startChannel', r.start, 0, 0);
+        SetPluginSetting('pixelfx', p + '_channelCount', r.count, 0, 0);
+    });
+}
+
+// Auto-fill any range still at the default (1500) with the real output span.
+document.addEventListener('DOMContentLoaded', function () {
+    var needs = ['hs', 'co', 'fr'].filter(function (p) {
+        var ci = document.getElementById('pfx-' + p + '-count');
+        return ci && ci.value === '1500';
+    });
+    if (!needs.length) return;
+    pfxComputeOutputs().then(function (r) {
+        if (!r.count) return;
+        needs.forEach(function (p) {
+            document.getElementById('pfx-' + p + '-start').value = r.start;
+            document.getElementById('pfx-' + p + '-count').value = r.count;
+            SetPluginSetting('pixelfx', p + '_startChannel', r.start, 0, 0);
+            SetPluginSetting('pixelfx', p + '_channelCount', r.count, 0, 0);
+        });
+    });
+});
 </script>
