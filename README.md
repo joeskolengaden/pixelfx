@@ -1,16 +1,32 @@
 # pixelfx — FPP plugin
 
-A single FPP **ChannelData** plugin that layers three independently-toggleable
+A single FPP **ChannelData** plugin that layers several independently-toggleable
 modifier functions over the playing sequence, applied each frame just before
-output:
+output, in this fixed order:
 
-1. **Hue shift** — time-driven hue rotation of lit pixels (sine/triangle/
-   sawtooth/square) with optional per-pixel phase for a traveling rainbow wave.
-2. **Color order** — reorder the R/G/B bytes of each pixel (RGB…BGR).
-3. **Framerate** — hold frames to a target FPS for a choppy / low-FPS look.
+1. **Mirror** — reverse or reflect the pixels in a range.
+2. **Hue shift** — animated hue rotation (sine/triangle/sawtooth/square) with an
+   optional per-pixel phase for a traveling rainbow wave. Uses a
+   luminance-preserving rotation matrix (cos/sin LUT), so it scales to large
+   ranges even on a single-core BeagleBone.
+3. **Saturation** — boost or wash out color (0 = grayscale … >100% = vivid).
+4. **Color order** — reorder the R/G/B bytes of each pixel (RGB…BGR).
+5. **Brightness** — dimmer / power limiter.
+6. **Sparkle** — random white twinkles with adjustable density and decay.
+7. **Strobe** — blink on/off at a chosen rate and duty.
+8. **Framerate** — hold frames to a target FPS for a choppy / low-FPS look.
 
-They run in that fixed order (framerate last, so it freezes the final result).
 Each function has its own enable and channel range, under one master switch.
+**RGBW-aware** (`channelsPerPixel` 3 or 4 — the white channel is preserved by
+hue and color-order). Ranges default to all configured output channels.
+
+**Presets** — save/recall named configurations from the settings page (stored in
+the `presets` setting), and apply them at show time via the FPP command below.
+
+**FPP commands** (so playlists / scheduler / MQTT / effects can drive it):
+`Pixel FX - Master`, `Pixel FX - Function On/Off`, `Pixel FX - Set Value`,
+`Pixel FX - Apply Preset`. Defined in `commands/descriptions.json`; each posts to
+the plugin's settings API so changes apply live.
 
 ## Settings page
 
@@ -54,25 +70,25 @@ load the compiled library. **Restart fppd** to load it.
 
 ## Settings (`<config>/plugin.pixelfx`)
 
-| Key | Type | Default | Meaning |
-|---|---|---|---|
-| `enabled` | 0/1 | `0` | Master on/off |
-| `onlyWhenPlaying` | 0/1 | `1` | Only modify during sequence playback |
-| `hs_enabled` | 0/1 | `0` | Hue-shift function on/off |
-| `hs_startChannel` / `hs_channelCount` | int | `1` / `1500` | Hue-shift range |
-| `hs_hueWave` | off/sine/triangle/sawtooth/square | `off` | Hue wave shape |
-| `hs_huePeriodMs` | int (ms) | `5000` | One full cycle |
-| `hs_hueDepthDeg` | int (deg) | `360` | Max hue shift |
-| `hs_huePhasePerChannel` | float (deg) | `0` | Per-pixel offset (traveling wave) |
-| `co_enabled` | 0/1 | `0` | Color-order function on/off |
-| `co_startChannel` / `co_channelCount` | int | `1` / `1500` | Color-order range |
-| `co_colorOrder` | RGB/RBG/GRB/GBR/BRG/BGR | `RGB` | Output byte order |
-| `fr_enabled` | 0/1 | `0` | Framerate function on/off |
-| `fr_startChannel` / `fr_channelCount` | int | `1` / `1500` | Framerate range |
-| `fr_fps` | int | `20` | Effective frame rate (0 = off) |
+The full, authoritative list of keys (with types, ranges, defaults and grouping)
+is the `settingsSchema` array in [`pluginInfo.json`](pluginInfo.json) — the app
+and settings page render from it. Summary:
 
-Each function's range is in channels (1 RGB LED = 3 channels). Set ranges to
-cover only your RGB pixel channels (not DMX/dumb channels).
+| Group | Keys | Meaning |
+|---|---|---|
+| general | `enabled`, `onlyWhenPlaying`, `channelsPerPixel` (3/4) | Master switch, playback gate, RGB/RGBW |
+| mirror | `mr_enabled`, `mr_startChannel`, `mr_channelCount`, `mr_mode` (reverse/mirror) | Reverse/reflect pixels |
+| hueshift | `hs_enabled`, range, `hs_hueWave`, `hs_huePeriodMs`, `hs_hueDepthDeg`, `hs_huePhasePerChannel` | Animated hue |
+| saturation | `sa_enabled`, range, `sa_level` (%) | Boost/wash color |
+| colororder | `co_enabled`, range, `co_colorOrder` | Reorder R/G/B |
+| brightness | `br_enabled`, range, `br_level` (%) | Dimmer / power limit |
+| sparkle | `sp_enabled`, range, `sp_density`, `sp_decayMs` | White twinkles |
+| strobe | `st_enabled`, range, `st_periodMs`, `st_duty` (%) | Blink on/off |
+| framerate | `fr_enabled`, range, `fr_fps` | Hold frames |
+
+Every function has its own `*_startChannel` / `*_channelCount` (channels;
+1 RGB LED = 3 channels), which default to all configured output channels. The
+`presets` key holds a JSON map of saved presets (managed by the settings page).
 
 ## Install / control
 

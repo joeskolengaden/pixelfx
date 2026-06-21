@@ -1,0 +1,28 @@
+[
+  { "name": "Pixel FX - Master",
+    "script": "master.sh",
+    "args": [
+      { "name": "State", "type": "bool", "description": "Turn the whole plugin on/off", "default": "true" }
+    ]
+  },
+  { "name": "Pixel FX - Function On/Off",
+    "script": "function.sh",
+    "args": [
+      { "name": "Function", "type": "string", "description": "Which function", "contents": ["mr","hs","sa","co","br","sp","st","fr"], "default": "hs" },
+      { "name": "State", "type": "bool", "description": "On/off", "default": "true" }
+    ]
+  },
+  { "name": "Pixel FX - Set Value",
+    "script": "setvalue.sh",
+    "args": [
+      { "name": "Setting key", "type": "string", "description": "e.g. hs_hueWave, br_level, co_colorOrder", "default": "hs_hueWave" },
+      { "name": "Value", "type": "string", "description": "e.g. sawtooth, 50, GRB", "default": "" }
+    ]
+  },
+  { "name": "Pixel FX - Apply Preset",
+    "script": "preset.sh",
+    "args": [
+      { "name": "Preset", "type": "string", "description": "Name of a saved preset", "default": "" }
+    ]
+  }
+]
