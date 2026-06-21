@@ -12,6 +12,12 @@ $menuEntries = Array(
 		'wrap' => 1
 	),
 	Array(
+		'text' => 'Pixel FX - Frame Generator',
+		'type' => 'content',
+		'page' => 'smoothgen.php',
+		'wrap' => 1
+	),
+	Array(
 		'text' => 'Pixel FX - Help',
 		'type' => 'help',
 		'page' => 'https://github.com/joeskolengaden/pixelfx',

@@ -28,6 +28,31 @@ the `presets` setting), and apply them at show time via the FPP command below.
 `Pixel FX - Apply Preset`. Defined in `commands/descriptions.json`; each posts to
 the plugin's settings API so changes apply live.
 
+## Frame Generator (smooth low-fps sequences)
+
+Under **Content Setup → Pixel FX - Frame Generator** the plugin can produce a
+smoother, higher-frame-rate copy of any sequence. It reads the source `.fseq`,
+inserts linearly-interpolated frames between the originals, and writes a new
+`.fseq` at the target rate (e.g. 10 → 40 fps). FPP then plays the smooth file
+natively. The original frames are preserved exactly; the media filename is
+carried over so audio stays in sync.
+
+![Frame Generator](images/frame-generator.png)
+
+This is needed because FPP plays exactly one FSEQ frame per output tick — it
+can't invent frames at playback time — so smoothing has to add real frames to
+the file. The interpolation engine (`pixelfx-smooth`, built from FPP's own
+`FSEQFile`) does the per-channel crossfade; pick a source, choose a target fps,
+and Generate (with a live progress bar).
+
+After generating, the **Framerate** function on the settings page lets you dial
+the *effective* rate of the new high-fps file live during playback (it holds
+frames to a target FPS), so you can change the smoothness on the fly.
+
+Notes: it's a crossfade (great for fades/washes/hue, softens hard motion rather
+than truly moving it), the source FSEQ is at least ~4 fps (format limit), and
+output is bound by your hardware's ~30 fps ceiling on 1020-pixel ports.
+
 ## Settings page
 
 The plugin adds a settings page under **Content Setup → Pixel FX**. Each function

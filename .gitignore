@@ -2,3 +2,4 @@
 *.so
 *.dylib
 src/*.o
+pixelfx-smooth
