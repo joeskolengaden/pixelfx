@@ -161,17 +161,26 @@ private:
         }
     }
     // start/count for a function -> (startIdx, byteCount). Returns false if empty.
+    // Clamps to the channel buffer so no function (or combination) can ever write
+    // out of bounds, whatever ranges are configured.
     bool range(long start, long count, long& startIdx, long& bytes) const {
         if (count < 1) return false;
         startIdx = std::max<long>(1, start) - 1;
         bytes = count;
-        return true;
+        const long cap = (long)FPPD_MAX_CHANNELS;
+        if (startIdx >= cap) return false;
+        if (startIdx + bytes > cap) bytes = cap - startIdx;
+        return bytes >= 1;
+    }
+    // Whole RGB pixels in `bytes` whose R,G,B (idx,+1,+2) all stay in range.
+    static long rgbPixels(long bytes, long cpp) {
+        return (bytes >= 3) ? ((bytes - 3) / cpp + 1) : 0;
     }
 
     void applySettings() {
         mEnabled = toLong(cfg("enabled"), 0) != 0;
         mOnlyWhenPlaying = toLong(cfg("onlyWhenPlaying"), 1) != 0;
-        mChPerPix = std::max<long>(1, toLong(cfg("channelsPerPixel"), 3));
+        mChPerPix = std::min<long>(8, std::max<long>(1, toLong(cfg("channelsPerPixel"), 3)));
 
         mMrEnabled = toLong(cfg("mr_enabled"), 0) != 0;
         mMrStart = toLong(cfg("mr_startChannel"), 1);
@@ -248,7 +257,7 @@ private:
         if (!mHsEnabled || mHsWave == 0 || mHsDepth == 0.0) return;
         long si, by;
         if (!range(mHsStart, mHsCount, si, by)) return;
-        long px = by / mChPerPix, cpp = mChPerPix;
+        long cpp = mChPerPix, px = rgbPixels(by, cpp);
         double base = mHsDepth * wavePhase(mHsWave, ms, mHsPeriodMs);
         if (mHsPhase == 0.0) {  // fast path: one matrix for the whole range
             float m[9]; hueMatrix(base, m);
@@ -269,7 +278,7 @@ private:
         if (!mSaEnabled || mSaLevel == 100) return;
         long si, by;
         if (!range(mSaStart, mSaCount, si, by)) return;
-        long px = by / mChPerPix, cpp = mChPerPix;
+        long cpp = mChPerPix, px = rgbPixels(by, cpp);
         long s = mSaLevel;  // percent
         for (long p = 0; p < px; ++p) {
             long i = si + p * cpp;
@@ -284,7 +293,7 @@ private:
         if (!mCoEnabled || mCoOrder == 0) return;
         long si, by;
         if (!range(mCoStart, mCoCount, si, by)) return;
-        long px = by / mChPerPix, cpp = mChPerPix;
+        long cpp = mChPerPix, px = rgbPixels(by, cpp);
         const auto& o = ORDER[mCoOrder];
         for (long p = 0; p < px; ++p) {
             long i = si + p * cpp;
@@ -306,7 +315,7 @@ private:
         if (!mSpEnabled) return;
         long si, by;
         if (!range(mSpStart, mSpCount, si, by)) return;
-        long px = by / mChPerPix, cpp = mChPerPix;
+        long cpp = mChPerPix, px = rgbPixels(by, cpp);
         if ((long)mSparkle.size() != px) mSparkle.assign(px, 0);
         int decay = (int)std::lround(255.0 * dt / mSpDecayMs);
         if (decay < 1) decay = 1;
