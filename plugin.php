@@ -26,6 +26,13 @@ function ctlNum($k, $d, $min = '', $max = '', $step = '')
     $a = ($min !== '' ? " min=\"$min\"" : '') . ($max !== '' ? " max=\"$max\"" : '') . ($step !== '' ? " step=\"$step\"" : '');
     return "<input type=\"number\" data-key=\"$k\"$a value=\"" . htmlspecialchars(px_get($k, $d)) . "\" onChange=\"" . px_set_js($k) . "\">";
 }
+function ctlSlider($k, $d, $min, $max, $step = '1', $unit = '')
+{
+    $v = htmlspecialchars(px_get($k, $d));
+    return '<div class="pfx-slider">'
+        . "<input type=\"range\" data-key=\"$k\" min=\"$min\" max=\"$max\" step=\"$step\" value=\"$v\" oninput=\"this.nextElementSibling.textContent=this.value+'$unit';\" onChange=\"" . px_set_js($k) . "\">"
+        . "<span class=\"pfx-sval\">$v$unit</span></div>";
+}
 function ctlSel($k, $opts, $d)
 {
     $h = "<select data-key=\"$k\" onChange=\"" . px_set_js($k) . "\">";
@@ -84,6 +91,9 @@ $presetsRaw = px_get('presets', '{}');
 #pfx .pfx-range{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 #pfx .pfx-range input{max-width:92px}
 #pfx .pfx-range span{color:#9aa1ac;font-size:12px}
+#pfx .pfx-slider{display:flex;align-items:center;gap:11px;max-width:260px}
+#pfx .pfx-slider input[type=range]{flex:1;accent-color:#2f9e6f;height:4px}
+#pfx .pfx-sval{min-width:50px;text-align:right;font-variant-numeric:tabular-nums;color:#374151;font-size:13px;font-weight:500}
 #pfx .pfx-btn,#pfx .pfx-auto{padding:6px 11px;border:1px solid #2f9e6f;background:#eafaf2;color:#1c6b4a;border-radius:7px;font-size:12.5px;cursor:pointer;white-space:nowrap}
 #pfx .pfx-btn:hover,#pfx .pfx-auto:hover{background:#dcf5e9}
 #pfx .pfx-btn.alt{border-color:#cdd3dc;background:#fff;color:#374151}
@@ -128,13 +138,13 @@ $presetsRaw = px_get('presets', '{}');
     echo row('Range', ctlRange('hs'), 'channels = LEDs &times; 3.');
     echo row('Wave', ctlSel('hs_hueWave', array('off', 'sine', 'triangle', 'sawtooth', 'square'), 'off'), 'Waveform driving the rotation.');
     echo row('Period', ctlNum('hs_huePeriodMs', '5000', 1), 'ms &middot; one full cycle.');
-    echo row('Depth', ctlNum('hs_hueDepthDeg', '360', 0, 360), '360 = full spectrum.');
+    echo row('Depth', ctlSlider('hs_hueDepthDeg', '360', 0, 360, 1, '&deg;'), '360 = full spectrum.');
     echo row('Phase / LED', ctlNum('hs_huePhasePerChannel', '0', '', '', '0.1'), 'Per-pixel offset for a traveling rainbow.');
   ?></div></div></div>
 
   <div class="pfx-card"><?php echo head('Saturation', '&mdash; boost or wash out color', 'sa_enabled') . bodyOpen('sa_enabled');
     echo row('Range', ctlRange('sa'), 'Start channel &amp; count.');
-    echo row('Saturation', ctlNum('sa_level', '100', 0, 300, 5), '% &middot; 100 = unchanged, 0 = grayscale, &gt;100 = boosted.');
+    echo row('Saturation', ctlSlider('sa_level', '100', 0, 300, 5, '%'), '100 = unchanged, 0 = grayscale, &gt;100 = boosted.');
   ?></div></div></div>
 
   <div class="pfx-card"><?php echo head('Color order', '&mdash; reorder R/G/B bytes', 'co_enabled') . bodyOpen('co_enabled');
@@ -144,24 +154,24 @@ $presetsRaw = px_get('presets', '{}');
 
   <div class="pfx-card"><?php echo head('Brightness', '&mdash; dimmer / power limit', 'br_enabled') . bodyOpen('br_enabled');
     echo row('Range', ctlRange('br'), 'Start channel &amp; count.');
-    echo row('Brightness', ctlNum('br_level', '100', 0, 100), '% &middot; 100 = full.');
+    echo row('Brightness', ctlSlider('br_level', '100', 0, 100, 1, '%'), '100 = full. Lower to dim / limit power.');
   ?></div></div></div>
 
   <div class="pfx-card"><?php echo head('Sparkle', '&mdash; random white twinkles', 'sp_enabled') . bodyOpen('sp_enabled');
     echo row('Range', ctlRange('sp'), 'Start channel &amp; count.');
-    echo row('Density', ctlNum('sp_density', '10', 0, 100), 'How often new twinkles appear.');
+    echo row('Density', ctlSlider('sp_density', '10', 0, 100, 1, ''), 'How often new twinkles appear.');
     echo row('Decay', ctlNum('sp_decayMs', '400', 1, 5000, 50), 'ms &middot; how fast each twinkle fades.');
   ?></div></div></div>
 
   <div class="pfx-card"><?php echo head('Strobe', '&mdash; blink on/off', 'st_enabled') . bodyOpen('st_enabled');
     echo row('Range', ctlRange('st'), 'Start channel &amp; count.');
     echo row('Period', ctlNum('st_periodMs', '200', 10, 10000, 10), 'ms &middot; full on+off cycle.');
-    echo row('On time', ctlNum('st_duty', '50', 1, 99), '% of each period the pixels are lit.');
+    echo row('On time', ctlSlider('st_duty', '50', 1, 99, 1, '%'), 'Percent of each period the pixels are lit.');
   ?></div></div></div>
 
   <div class="pfx-card"><?php echo head('Framerate', '&mdash; hold frames to a target FPS', 'fr_enabled') . bodyOpen('fr_enabled');
     echo row('Range', ctlRange('fr'), 'Start channel &amp; count.');
-    echo row('Frames / sec', ctlNum('fr_fps', '20', 0, 120), '0 = disabled.');
+    echo row('Frames / sec', ctlSlider('fr_fps', '20', 0, 60, 1, ' fps'), '0 = disabled. Above the sequence&rsquo;s own rate has no effect (FPP default 20, ~30 max on 1020-pixel ports).');
   ?></div></div></div>
 </div>
 
