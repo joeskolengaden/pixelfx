@@ -9,9 +9,10 @@
  *
  *   pixelfx-smooth <in.fseq> <out.fseq> <targetFps> [progressFile]
  *
- * Original source frames are preserved exactly; N-1 interpolated frames are
- * inserted between each, where N = round(targetFps / sourceFps). The media
- * filename and other variable headers are carried over, so audio stays in sync.
+ * Time-based resample: the output is sampled at the new (integer-ms) step time
+ * along the source's real timeline, so total duration is preserved (audio stays
+ * in sync) for any target rate, not just integer multiples. The media filename
+ * and other variable headers are carried over.
  */
 
 #include <cmath>
@@ -51,17 +52,23 @@ int main(int argc, char** argv) {
     const uint32_t ch = src->getChannelCount();
     const double srcFps = inStep > 0 ? 1000.0 / inStep : 0.0;
 
-    int N = (srcFps > 0) ? (int)std::lround(targetFps / srcFps) : 1;
-    if (N < 1) N = 1;
-    int newStep = (N > 0) ? (int)std::lround((double)inStep / N) : inStep;
+    // New step time (integer ms) from the target rate. FSEQ step time is one
+    // byte, so clamp to [1,255]. Output frame count keeps total duration.
+    int newStep = (int)std::lround(1000.0 / targetFps);
     if (newStep < 1) newStep = 1;
-    const uint32_t newFrames = (inFrames <= 1) ? inFrames : (inFrames - 1) * N + 1;
+    if (newStep > 255) newStep = 255;
+    const double srcDurMs = (double)inFrames * inStep;
+    uint32_t newFrames = (uint32_t)std::llround(srcDurMs / newStep);
+    if (newFrames < 1) newFrames = 1;
 
     std::vector<std::pair<uint32_t, uint32_t>> ranges;
     ranges.push_back(std::pair<uint32_t, uint32_t>(0, 999999999));
     src->prepareRead(ranges);
 
-    FSEQFile* dst = FSEQFile::createFSEQFile(out, 2, FSEQFile::CompressionType::zstd, -99);
+    // Use zlib, not zstd: FPP's V2 zstd writer drops the final frame for very
+    // short files (<= ~10 frames) in some versions; zlib is correct at all
+    // sizes. Decompression cost is negligible at these channel counts.
+    FSEQFile* dst = FSEQFile::createFSEQFile(out, 2, FSEQFile::CompressionType::zlib, -99);
     if (!dst) { fprintf(stderr, "cannot create %s\n", out.c_str()); delete src; writeProgress(prog, -1); return 1; }
     dst->initializeFromFSEQ(*src);
     dst->setStepTime(newStep);
@@ -75,39 +82,44 @@ int main(int argc, char** argv) {
         if (fd) { fd->readFrame(buf.data(), (uint32_t)bufsz); delete fd; }
     };
 
-    uint32_t outIdx = 0;
-    if (inFrames == 1) {
-        readF(0, A);
-        dst->addFrame(outIdx++, A.data());
-    } else if (inFrames > 1) {
-        readF(0, A);
-        readF(1, B);
-        for (uint32_t a = 0; a + 1 < inFrames; ++a) {
-            for (int k = 0; k < N; ++k) {
-                if (k == 0) {
-                    dst->addFrame(outIdx++, A.data());
-                } else {
-                    for (size_t i = 0; i < bufsz; ++i) {
-                        int va = A[i], vb = B[i];
-                        O[i] = (uint8_t)(va + (vb - va) * k / N);
-                    }
-                    dst->addFrame(outIdx++, O.data());
-                }
-            }
+    // Resample by time. For each output frame j, sample the source timeline at
+    // t = j*newStep ms and linearly blend the two bracketing source frames.
+    // a (the lower source frame index) is non-decreasing, so stream two buffers.
+    uint32_t curA = 0;
+    readF(0, A);
+    if (inFrames > 1) readF(1, B); else B = A;
+
+    for (uint32_t j = 0; j < newFrames; ++j) {
+        double pos = (inStep > 0) ? ((double)j * newStep / inStep) : 0.0;
+        uint32_t a = (uint32_t)pos;
+        if (a > inFrames - 1) a = inFrames - 1;
+        while (curA < a) {
             A.swap(B);
-            uint32_t next = (a + 2 < inFrames) ? (a + 2) : (inFrames - 1);
-            readF(next, B);
-            if (prog && (a % 8 == 0)) writeProgress(prog, (int)(100.0 * a / (inFrames - 1)));
+            ++curA;
+            uint32_t nb = (curA + 1 < inFrames) ? (curA + 1) : (inFrames - 1);
+            readF(nb, B);
         }
-        readF(inFrames - 1, A);
-        dst->addFrame(outIdx++, A.data());  // exact final frame
+        double frac = pos - (double)a;
+        if (a >= inFrames - 1) frac = 0.0;
+        if (frac <= 0.0) {
+            dst->addFrame(j, A.data());
+        } else {
+            for (size_t i = 0; i < bufsz; ++i) {
+                int va = A[i], vb = B[i];
+                int v = (int)std::lround(va + (vb - va) * frac);
+                O[i] = (uint8_t)(v < 0 ? 0 : (v > 255 ? 255 : v));
+            }
+            dst->addFrame(j, O.data());
+        }
+        if (prog && (j % 32 == 0)) writeProgress(prog, (int)(100.0 * j / newFrames));
     }
 
     dst->finalize();
     delete dst;
     delete src;
     writeProgress(prog, 100);
-    printf("OK: %u frames @ %dms (%.2f fps)  ->  %u frames @ %dms (%.2f fps), N=%d\n",
-           inFrames, inStep, srcFps, outIdx, newStep, newStep > 0 ? 1000.0 / newStep : 0.0, N);
+    printf("OK: %u frames @ %dms (%.2f fps, %.0fms)  ->  %u frames @ %dms (%.2f fps, %.0fms)\n",
+           inFrames, inStep, srcFps, srcDurMs,
+           newFrames, newStep, 1000.0 / newStep, (double)newFrames * newStep);
     return 0;
 }

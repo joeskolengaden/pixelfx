@@ -21,6 +21,9 @@ $dstPath = "$seqDir/$out.fseq";
 $tool    = "$plugDir/pixelfx-smooth";
 
 if (!is_file($srcPath)) { echo json_encode(array('status' => 'error', 'msg' => 'Source sequence not found.')); exit; }
+if (file_exists($dstPath) && realpath($srcPath) === realpath($dstPath)) {
+    echo json_encode(array('status' => 'error', 'msg' => 'Output name must differ from the source.')); exit;
+}
 if (!is_executable($tool)) { echo json_encode(array('status' => 'error', 'msg' => 'Smoothing tool not built. Reinstall/Update the plugin.')); exit; }
 
 $job  = 'pfxsmooth_' . time() . '_' . mt_rand(1000, 9999);

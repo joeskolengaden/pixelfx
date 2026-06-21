@@ -58,7 +58,7 @@ function pfxgLoad() {
         var s = document.getElementById('src');
         s.innerHTML = '<option value="">— choose a sequence —</option>';
         (list || []).forEach(function (n) {
-            if (/\.fseq$/i.test(n) || true) { var o = document.createElement('option'); o.value = n; o.textContent = n; s.appendChild(o); }
+            var o = document.createElement('option'); o.value = n; o.textContent = n; s.appendChild(o);
         });
     }).catch(function () { document.getElementById('src').innerHTML = '<option>(could not load sequences)</option>'; });
 }
@@ -104,10 +104,14 @@ function pfxgGenerate() {
 }
 function pfxgPoll(job, btn, out, fps) {
     var status = document.getElementById('status');
+    var last = -2, stall = 0;
     var t = setInterval(function () {
         fetch(pfxgApi('progress.php', 'job=' + encodeURIComponent(job))).then(function (r) { return r.json(); }).then(function (p) {
             var v = parseInt(p.progress);
-            if (v === -1) { clearInterval(t); status.innerHTML = '<span class="err">Generation failed.</span>'; btn.disabled = false; return; }
+            if (v === -1) { clearInterval(t); status.innerHTML = '<span class="err">Generation failed. See /tmp/' + job + '.log on the device.</span>'; btn.disabled = false; return; }
+            // stall detection: no progress change for ~30s -> assume the job died
+            if (v === last) { if (++stall > 50) { clearInterval(t); status.innerHTML = '<span class="err">Job stalled (no progress for 30s). Check /tmp/' + job + '.log.</span>'; btn.disabled = false; return; } }
+            else { stall = 0; last = v; }
             document.getElementById('barfill').style.width = Math.max(2, v) + '%';
             status.textContent = 'Generating… ' + v + '%';
             if (v >= 100) {
