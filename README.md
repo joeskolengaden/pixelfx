@@ -20,6 +20,13 @@ Each function has its own enable and channel range, under one master switch.
 **RGBW-aware** (`channelsPerPixel` 3 or 4 — the white channel is preserved by
 hue and color-order). Ranges default to all configured output channels.
 
+**Performance guard:** all ranges are clamped to the channel buffer (no
+combination can write out of bounds), and the plugin times its own per-frame
+work — if it sustains too large a share of the frame budget (e.g. several heavy
+functions over a huge range on a single-core BeagleBone), it raises a
+self-clearing warning in FPP's UI rather than silently dropping frames. Narrow a
+function's range or disable it if you see it.
+
 **Presets** — save/recall named configurations from the settings page (stored in
 the `presets` setting), and apply them at show time via the FPP command below.
 

@@ -33,6 +33,7 @@
 
 #include "Plugin.h"
 #include "Sequence.h"
+#include "Warnings.h"
 #include "channeltester/ChannelTester.h"
 
 namespace {
@@ -137,6 +138,7 @@ public:
         if (dt < 0 || dt > 1000) dt = 20;
         mLastMs = ms;
 
+        const auto t0 = std::chrono::steady_clock::now();
         applyMirror(seqData);
         applyHueShift(ms, seqData);
         applySaturation(seqData);
@@ -145,6 +147,34 @@ public:
         applySparkle(dt, seqData);
         applyStrobe(ms, seqData);
         applyFramerate(ms, seqData);  // last: freezes the final result
+
+        long procUs = (long)std::chrono::duration_cast<std::chrono::microseconds>(
+            std::chrono::steady_clock::now() - t0).count();
+        monitorBudget(dt, procUs);
+    }
+
+    // Watch the per-frame processing cost. The plugin is only one part of FPP's
+    // frame work, so if it sustains a large fraction of the frame budget (e.g.
+    // hue over a huge range on a single-core BBB), surface a self-clearing FPP
+    // warning rather than silently dropping frames. Only fires on sustained
+    // overrun (>=25% of frames in a ~1s window over 60% of budget), so brief
+    // spikes don't false-alarm.
+    void monitorBudget(int frameMs, long procUs) {
+        long budgetUs = (long)frameMs * 1000;
+        if (budgetUs < 1000) budgetUs = 1000;
+        ++mWinFrames;
+        if (procUs > budgetUs * 6 / 10) ++mWinOver;
+        int evalFrames = (frameMs > 0) ? (1000 / frameMs) : 20;
+        if (evalFrames < 5) evalFrames = 5;
+        if (mWinFrames >= evalFrames) {
+            if (mWinOver * 4 >= mWinFrames) {
+                WarningHolder::AddWarningTimeout(
+                    "Pixel FX: frame processing is near the output budget - "
+                    "disable some functions or narrow their channel ranges", 8);
+            }
+            mWinFrames = 0;
+            mWinOver = 0;
+        }
     }
 
 private:
@@ -358,6 +388,7 @@ private:
     std::chrono::steady_clock::time_point mLastReload;
     int mLastMs = 0;
     uint32_t mRng = 2463534242u;
+    int mWinFrames = 0, mWinOver = 0;
 
     bool mEnabled = false, mOnlyWhenPlaying = true;
     long mChPerPix = 3;
