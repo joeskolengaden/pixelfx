@@ -12,6 +12,15 @@ output:
 They run in that fixed order (framerate last, so it freezes the final result).
 Each function has its own enable and channel range, under one master switch.
 
+## Settings page
+
+The plugin adds a settings page under **Content Setup → Pixel FX**. Each function
+is a card with its own enable toggle and channel range; the range auto-fills to
+all configured output channels (the **All outputs** button re-detects from your
+FPP output config). Left: out of the box. Right: configured.
+
+![Pixel FX settings page](images/pixelfx-settings.png)
+
 ## FPP compatibility (5.4 → 9.x)
 
 One source compiles against any FPP from **5.4 onward** — it uses only plugin API
